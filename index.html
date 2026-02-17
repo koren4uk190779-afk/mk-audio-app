@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Митний кодекс — аудіо</title>
+
+<style>
+  :root{
+    --bg:#f5f7fb;
+    --card:#fff;
+    --text:#111;
+    --muted:#445;
+    --btn:#1976ff;
+    --btnText:#fff;
+    --btn2bg:#e9f1ff;
+    --btn2text:#1976ff;
+    --shadow: 0 8px 24px rgba(0,0,0,.08);
+    --rowGap:14px;
+    --btnW:180px;
+    --activeRing: 0 0 0 3px rgba(25,118,255,.25);
+  }
+  body.dark{
+    --bg:#0c111b;
+    --card:#121a2a;
+    --text:#e9eefc;
+    --muted:#aab6d6;
+    --btn:#3b82f6;
+    --btnText:#fff;
+    --btn2bg:#1b2742;
+    --btn2text:#cfe1ff;
+    --shadow: 0 10px 26px rgba(0,0,0,.45);
+    --activeRing: 0 0 0 3px rgba(59,130,246,.35);
+  }
+
+  body{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+  }
+  .wrap{ max-width:980px; margin:0 auto; padding:18px; }
+  h1{ margin:8px 0 6px; font-size:30px; }
+  .sub{ color:var(--muted); font-size:18px; margin-bottom:14px; }
+
+  .card{
+    background:var(--card);
+    border-radius:18px;
+    padding:16px;
+    box-shadow: var(--shadow);
+  }
+
+  .row{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin:10px 0;
+  }
+
+  .btn{
+    background:var(--btn);
+    color:var(--btnText);
+    border:0;
+    border-radius:14px;
+    padding:12px 16px;
+    font-size:18px;
+    cursor:pointer;
+    transition: transform .05s ease, filter .15s ease, box-shadow .15s ease;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn.secondary{
+    background:var(--btn2bg);
+    color:var(--btn2text);
+  }
+
+  /* ===== Рядок розділу: кнопка + назва ===== */
+  .trackRow{
+    display:grid;
+    grid-template-columns: var(--btnW) 1fr;
+    gap: var(--rowGap);
+    align-items:start;
+    margin-bottom:14px;
+  }
+  .trackRow .btn{
+    width: var(--btnW);
+    text-align:center;
+  }
+  .trackRow .btn.active{
+    box-shadow: var(--activeRing);
+    filter: brightness(1.02);
+  }
+  .trackName{
+    font-size:17px;
+    line-height:1.35;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+    color:var(--text);
+    opacity:.95;
+  }
+
+  /* === Верхняя панель управления === */
+  .controlsBar{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    margin:10px 0 2px;
+  }
+  .controlsLeft, .controlsRight{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .mini{
+    font-size:14px;
+    color:var(--muted);
+  }
+
+  /* Mobile */
+  @media (max-width: 600px){
+    h1{ font-size:26px; }
+    .trackRow{ grid-template-columns: 1fr; }
+    .trackRow .btn{ width:100%; }
+    .controlsBar{ justify-content:flex-start; }
+  }
+
+  /* Немного затемнить audio в dark */
+  body.dark audio{ filter: brightness(0.92) contrast(1.05); }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>Митний кодекс — аудіо</h1>
+  <div class="sub">Розділи I–XX (без XXI). Онлайн-прослуховування</div>
+
+  <div class="card">
+    <audio id="player" controls style="width:100%;"></audio>
+
+    <div class="controlsBar">
+      <div class="controlsLeft">
+        <button id="btnContinue" class="btn">Продовжити</button>
+        <button id="btnSpeed" class="btn secondary">Швидкість: 1.0×</button>
+      </div>
+      <div class="controlsRight">
+        <button id="btnTheme" class="btn secondary">Тема: світла</button>
+      </div>
+    </div>
+
+    <div class="mini" id="lastInfo"></div>
+
+    <div id="trackBtns" style="margin-top:12px; display:flex; flex-direction:column;"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const player    = document.getElementById("player");
+  const trackBtns = document.getElementById("trackBtns");
+  const btnSpeed  = document.getElementById("btnSpeed");
+  const btnTheme  = document.getElementById("btnTheme");
+  const btnContinue = document.getElementById("btnContinue");
+  const lastInfo  = document.getElementById("lastInfo");
+
+  // ====== Storage keys ======
+  const K_LAST_INDEX = "mk_last_index";
+  const K_LAST_TIME  = "mk_last_time";
+  const K_SPEED_IDX  = "mk_speed_index";
+  const K_DARK       = "mk_dark";
+
+  function lsGet(key, fallback=null){
+    try{
+      const v = localStorage.getItem(key);
+      return (v === null || v === undefined) ? fallback : v;
+    }catch(e){ return fallback; }
+  }
+  function lsSet(key, value){
+    try{ localStorage.setItem(key, String(value)); }catch(e){}
+  }
+
+  // ====== Speed ======
+  const speeds = [1.0, 1.15, 1.3, 1.5];
+  let speedIndex = Math.max(0, Math.min(parseInt(lsGet(K_SPEED_IDX, "0"), 10) || 0, speeds.length-1));
+
+  function applySpeed(){
+    player.playbackRate = speeds[speedIndex];
+    btnSpeed.textContent = "Швидкість: " + speeds[speedIndex] + "×";
+    lsSet(K_SPEED_IDX, speedIndex);
+  }
+  btnSpeed.onclick = () => {
+    speedIndex = (speedIndex + 1) % speeds.length;
+    applySpeed();
+  };
+  applySpeed();
+
+  // ====== Theme (dark mode) ======
+  const darkPref = lsGet(K_DARK, "0") === "1";
+  if (darkPref) document.body.classList.add("dark");
+  function applyThemeLabel(){
+    btnTheme.textContent = "Тема: " + (document.body.classList.contains("dark") ? "темна" : "світла");
+    lsSet(K_DARK, document.body.classList.contains("dark") ? 1 : 0);
+  }
+  btnTheme.onclick = () => {
+    document.body.classList.toggle("dark");
+    applyThemeLabel();
+  };
+  applyThemeLabel();
+
+  // ====== Tracks ======
+  const TRACKS = [
+    { title:"Розділ I",   name:"ЗАГАЛЬНІ ПОЛОЖЕННЯ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_I.m4a"},
+    { title:"Розділ II",  name:"КРАЇНА ПОХОДЖЕННЯ ТОВАРУ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_2.m4a"},
+    { title:"Розділ III", name:"МИТНА ВАРТІСТЬ ТОВАРІВ ТА МЕТОДИ ЇЇ ВИЗНАЧЕННЯ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_3.m4a"},
+    { title:"Розділ IV",  name:"УКРАЇНСЬКА КЛАСИФІКАЦІЯ ТОВАРІВ ЗОВНІШНЬОЕКОНОМІЧНОЇ ДІЯЛЬНОСТІ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_4.m4a"},
+    { title:"Розділ V",   name:"МИТНІ РЕЖИМИ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_5.m4a"},
+    { title:"Розділ VI",  name:"ПЕРЕМІЩЕННЯ І ПРОПУСК ТОВАРІВ, ТРАНСПОРТНИХ ЗАСОБІВ КОМЕРЦІЙНОГО ПРИЗНАЧЕННЯ ЧЕРЕЗ МИТНИЙ КОРДОН УКРАЇНИ. МИТНІ ФОРМАЛЬНОСТІ ПРИ ПЕРЕМІЩЕННІ ТОВАРІВ ЧЕРЕЗ МИТНИЙ КОРДОН УКРАЇНИ РІЗНИМИ ВИДАМИ ТРАНСПОРТУ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_6.m4a"},
+    { title:"Розділ VII", name:"ЗБЕРІГАННЯ ТОВАРІВ, ТРАНСПОРТНИХ ЗАСОБІВ КОМЕРЦІЙНОГО ПРИЗНАЧЕННЯ НА СКЛАДАХ МИТНИХ ОРГАНІВ ТА РОЗПОРЯДЖЕННЯ НИМИ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_7.m4a"},
+    { title:"Розділ VIII",name:"МИТНЕ ОФОРМЛЕННЯ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_8.m4a"},
+    { title:"Розділ IX",  name:"МИТНІ ПЛАТЕЖІ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_9.m4a"},
+    { title:"Розділ X",   name:"ЗАБЕЗПЕЧЕННЯ СПЛАТИ МИТНИХ ПЛАТЕЖІВ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_10.m4a"},
+    { title:"Розділ XI",  name:"МИТНИЙ КОНТРОЛЬ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_11.m4a"},
+    { title:"Розділ XII", name:"ОСОБЛИВОСТІ ПРОПУСКУ ТА ОПОДАТКУВАННЯ ТОВАРІВ, ЩО ПЕРЕМІЩУЮТЬСЯ (ПЕРЕСИЛАЮТЬСЯ) ЧЕРЕЗ МИТНИЙ КОРДОН УКРАЇНИ ГРОМАДЯНАМИ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_12.m4a"},
+    { title:"Розділ XIII",name:"ОСОБЛИВОСТІ ПРОПУСКУ ТА ОПОДАТКУВАННЯ ТОВАРІВ, ЩО ПЕРЕМІЩУЮТЬСЯ ЧЕРЕЗ МИТНИЙ КОРДОН УКРАЇНИ ПРЕДСТАВНИЦТВАМИ ІНОЗЕМНИХ ДЕРЖАВ, МІЖНАРОДНИМИ ОРГАНІЗАЦІЯМИ ТА ОФІЦІЙНИМИ ОСОБАМИ, А ТАКОЖ ДИПЛОМАТИЧНИМИ ПРЕДСТАВНИЦТВАМИ УКРАЇНИ, ЩО ЗНАХОДЯТЬСЯ ЗА КОРДОНОМ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_13.m4a"},
+    { title:"Розділ XIV", name:"СПРИЯННЯ ЗАХИСТУ ПРАВ ІНТЕЛЕКТУАЛЬНОЇ ВЛАСНОСТІ ПІД ЧАС ПЕРЕМІЩЕННЯ ТОВАРІВ ЧЕРЕЗ МИТНИЙ КОРДОН УКРАЇНИ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_14.m4a"},
+    { title:"Розділ XV",  name:"ЗДІЙСНЕННЯ МИТНИМИ ОРГАНАМИ КОНТРОЛЮ ЗА ОКРЕМИМИ ВИДАМИ ДІЯЛЬНОСТІ ПІДПРИЄМСТВ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_15.m4a"},
+    { title:"Розділ XVI", name:"МИТНА СТАТИСТИКА", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_16.m4a"},
+    { title:"Розділ XVII",name:"ЗАПОБІГАННЯ ТА ПРОТИДІЯ КОНТРАБАНДІ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_17.m4a"},
+    { title:"Розділ XVIII",name:"ПОРУШЕННЯ МИТНИХ ПРАВИЛ ТА ВІДПОВІДАЛЬНІСТЬ ЗА НИХ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_18.m4a"},
+    { title:"Розділ XIX", name:"ПРОВАДЖЕННЯ У СПРАВАХ ПРО ПОРУШЕННЯ МИТНИХ ПРАВИЛ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_19.m4a"},
+    { title:"Розділ XX",  name:"МИТНІ ОРГАНИ", url:"https://github.com/koren4uk190779-afk/mk-audio/releases/download/v1.0/Rozdil_20.m4a"}
+  ];
+
+  // ====== UI rendering + active highlight ======
+  let currentIndex = -1;
+  let trackButtons = [];
+
+  function setActive(i){
+    trackButtons.forEach((b, idx) => b.classList.toggle("active", idx === i));
+  }
+
+  function renderTracks(){
+    trackBtns.innerHTML = "";
+    trackButtons = [];
+
+    TRACKS.forEach((t, i) => {
+      const row = document.createElement("div");
+      row.className = "trackRow";
+
+      const b = document.createElement("button");
+      b.className = "btn";
+      b.textContent = t.title;
+      b.onclick = () => playByIndex(i, 0, true);
+
+      const name = document.createElement("div");
+      name.className = "trackName";
+      name.textContent = t.name || "";
+
+      row.appendChild(b);
+      row.appendChild(name);
+      trackBtns.appendChild(row);
+
+      trackButtons.push(b);
+    });
+
+    if (currentIndex >= 0) setActive(currentIndex);
+  }
+
+  // ====== play + resume ======
+  function persistProgress(){
+    if (currentIndex < 0) return;
+    lsSet(K_LAST_INDEX, currentIndex);
+    lsSet(K_LAST_TIME, Math.floor(player.currentTime || 0));
+    updateLastInfo();
+  }
+
+  function updateLastInfo(){
+    const idxStr = lsGet(K_LAST_INDEX, "");
+    const timeStr = lsGet(K_LAST_TIME, "0");
+    const idx = parseInt(idxStr, 10);
+
+    if (!Number.isFinite(idx) || idx < 0 || idx >= TRACKS.length){
+      lastInfo.textContent = "";
+      return;
+    }
+
+    const sec = Math.max(0, parseInt(timeStr, 10) || 0);
+    const mm = String(Math.floor(sec/60)).padStart(2,"0");
+    const ss = String(sec%60).padStart(2,"0");
+    lastInfo.textContent = "Останнє: " + TRACKS[idx].title + " — " + (TRACKS[idx].name || "") + " ( " + mm + ":" + ss + " )";
+  }
+
+  function playByIndex(i, startAtSeconds=0, autoplay=true){
+    if (i < 0 || i >= TRACKS.length) return;
+
+    currentIndex = i;
+    setActive(i);
+
+    player.pause();
+    player.src = TRACKS[i].url;
+    player.load();
+    applySpeed();
+
+    // Save index immediately
+    lsSet(K_LAST_INDEX, i);
+    lsSet(K_LAST_TIME, Math.floor(startAtSeconds || 0));
+    updateLastInfo();
+
+    const onMeta = () => {
+      player.removeEventListener("loadedmetadata", onMeta);
+      // clamp time
+      const t = Math.max(0, Number(startAtSeconds) || 0);
+      try { player.currentTime = t; } catch(e){}
+      if (autoplay) player.play().catch(()=>{});
+    };
+    player.addEventListener("loadedmetadata", onMeta);
+  }
+
+  // ====== Continue button ======
+  btnContinue.onclick = () => {
+    const idx = parseInt(lsGet(K_LAST_INDEX, "-1"), 10);
+    const t   = parseInt(lsGet(K_LAST_TIME, "0"), 10) || 0;
+
+    if (!Number.isFinite(idx) || idx < 0 || idx >= TRACKS.length){
+      // If nothing saved: start from first
+      playByIndex(0, 0, true);
+      return;
+    }
+    playByIndex(idx, t, true);
+  };
+
+  // ====== Autosave time (throttled) ======
+  let lastSaveTs = 0;
+  player.addEventListener("timeupdate", () => {
+    const now = Date.now();
+    if (now - lastSaveTs < 1200) return; // ~1.2s throttle
+    lastSaveTs = now;
+    persistProgress();
+  });
+
+  // Also save on pause/seek
+  player.addEventListener("pause", persistProgress);
+  player.addEventListener("seeking", persistProgress);
+
+  // Auto-next on end (with progress reset)
+  player.addEventListener("ended", () => {
+    if (currentIndex === -1) return;
+    const next = currentIndex + 1;
+    if (next < TRACKS.length){
+      playByIndex(next, 0, true);
+    } else {
+      // finished last track: reset time to 0 but keep last index
+      lsSet(K_LAST_TIME, 0);
+      updateLastInfo();
+    }
+  });
+
+  // ====== Init ======
+  renderTracks();
+  updateLastInfo();
+
+  // Optional: preselect active highlight if stored
+  const storedIdx = parseInt(lsGet(K_LAST_INDEX, "-1"), 10);
+  if (Number.isFinite(storedIdx) && storedIdx >= 0 && storedIdx < TRACKS.length){
+    currentIndex = storedIdx;
+    setActive(storedIdx);
+  }
+
+})();
+</script>
+
+</body>
+</html>
