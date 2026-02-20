@@ -6,6 +6,7 @@
   <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0f3d2e">
 
+
 <title>Митний кодекс — аудіо</title>
 
 <style>
@@ -141,7 +142,9 @@
   <div class="sub">Розділи I–XX (без XXI). Онлайн-прослуховування</div>
 
   <div class="card">
-    <audio id="player" controls style="width:100%;"></audio>
+    <audio id="player" controls style="width:100%;">
+      <source id="playerSrc" src="" type="audio/mp4">
+    </audio>
 
     <div class="controlsBar">
       <div class="controlsLeft">
@@ -162,11 +165,19 @@
 <script>
 (function(){
   const player    = document.getElementById("player");
+  const playerSrc = document.getElementById("playerSrc");
   const trackBtns = document.getElementById("trackBtns");
   const btnSpeed  = document.getElementById("btnSpeed");
   const btnTheme  = document.getElementById("btnTheme");
   const btnContinue = document.getElementById("btnContinue");
   const lastInfo  = document.getElementById("lastInfo");
+
+  player.addEventListener("error", () => {
+    const e = player.error;
+    const code = e?.code ?? "null";
+    console.log("AUDIO_ERROR", { code, src: player.currentSrc, networkState: player.networkState });
+    lastInfo.textContent = "AUDIO_ERROR code=" + code;
+  });
 
   // ====== Storage keys ======
   const K_LAST_INDEX = "mk_last_index";
@@ -303,7 +314,7 @@
     setActive(i);
 
     player.pause();
-    player.src = TRACKS[i].url;
+    playerSrc.src = TRACKS[i].url;
     player.load();
     applySpeed();
 
@@ -377,6 +388,3 @@
 
 </body>
 </html>
-
-
-
